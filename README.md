@@ -35,13 +35,25 @@ marketplace 读取默认分支 `main`；安装与升级比较的版本取自扩�
 .omp-plugin/marketplace.json marketplace 目录：每个扩展一条，source 指向扩展目录
 <扩展>/package.json           扩展清单：omp.extensions 指向入口文件
 <扩展>/index.ts               扩展入口
+package.json, tsconfig.json  仅供开发期类型检查，不是 OMP 插件
 scripts/sync_omp_extension.py 本机同步工具（macOS）
 tests/                        同步工具回归测试与真实 OMP 加载测试
 ```
 
 扩展目录保持扁平：同步只复制目录第一层的普通文件，跳过隐藏文件、子目录与 `*.test.ts`。
 
-新增扩展：建目录（`package.json` 的 `omp.extensions` 指向入口），在 `.omp-plugin/marketplace.json` 增加一条 `source` 为 `./<扩展>` 的记录，并在上方扩展表中登记。发布改动时提升扩展 `package.json` 的 `version`：朋友的 `upgrade` 与本机同步的自动提交都以它为准。
+新增扩展：建目录（`package.json` 的 `omp.extensions` 指向入口），在 `.omp-plugin/marketplace.json` 增加一条 `source` 为 `./<扩展>` 的记录，并在上方扩展表中登记。发布改动时提升扩展 `package.json` 的 `version`：朋友的 `upgrade` 与本机同步的自动提交都以它为准。版本号放在最后改：自动提交发生在版本号变化的那次同步，之后的修改只同步文件、不再提交。
+
+### 类型检查
+
+扩展运行时由 OMP 提供 `@oh-my-pi/*` 模块、Node 与 Bun 全局对象，扩展目录本身不带依赖。编辑器和类型检查需要在仓库根目录安装与已验证 OMP 版本一致的开发依赖（`node_modules` 约 360 MB，不进入版本控制，也不随扩展分发）：
+
+```bash
+bun install
+bun run typecheck
+```
+
+升级 OMP 后，同步修改根 `package.json` 中 `@oh-my-pi/*` 的版本并重新检查。
 
 ### 测试
 

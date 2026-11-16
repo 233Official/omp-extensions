@@ -1,0 +1,15 @@
+{
+	"name": "omp-extensions-dev",
+	"private": true,
+	"type": "module",
+	"description": "仅用于开发期类型检查；不是 OMP 插件，扩展经 .omp-plugin/marketplace.json 分发",
+	"scripts": {
+		"typecheck": "tsc --noEmit"
+	},
+	"devDependencies": {
+		"@oh-my-pi/pi-catalog": "18.20.3",
+		"@oh-my-pi/pi-coding-agent": "18.20.3",
+		"@types/bun": "latest",
+		"typescript": "latest"
+	}
+}

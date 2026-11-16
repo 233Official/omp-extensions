@@ -12,7 +12,7 @@ const CPA_MODELS_PATH = "/v1/models";
 /**
  * 让 openai-codex 在 CPA 上同时完成地址切换和模型发现，保留 OMP 对该 provider 的内置策略。
  *
- * - 地址：CODEX_CPA_BASE_URL 非空时覆盖运行时地址，供 omp-26f、omp-mac 等启动函数切换 CPA；
+ * - 地址：CODEX_CPA_BASE_URL 非空时覆盖运行时地址，供启动脚本在多个 CPA 之间切换；
  *   否则沿用 models.yml 中 openai-codex 的 baseUrl。只改运行时注册，不写回配置，不碰认证。
  * - 发现：OMP 原生 Codex 发现只请求 {baseUrl}/codex/models 与 {baseUrl}/models，CPA 不提供这两个路由；
  *   CPA 在 {根地址}/v1/models?client_version=... 返回同格式的 Codex 目录。这里复用 OMP 自带的
@@ -70,6 +70,9 @@ function cpaRootOf(baseUrl: string): string | undefined {
 /**
  * 失败一律抛错而不是返回空数组：OMP 把成功结果视为权威目录，空数组会清空 openai-codex 的模型列表，
  * 抛错则保留上次缓存。
+ *
+ * 返回 OMP 自带解析器产出的完整模型行（含 api、remoteCompaction 等字段），只把 baseUrl 换成推理地址。
+ * 解析器总会填入上下文窗口与输出上限；这里的非空判断只为让类型满足 ProviderModelConfig。
  */
 async function fetchCpaCodexModels(cpaRoot: string, baseUrl: string, apiKey: string | undefined) {
 	if (!apiKey) throw new Error("openai-codex-endpoint: no openai-codex API key for CPA model discovery");
@@ -78,7 +81,12 @@ async function fetchCpaCodexModels(cpaRoot: string, baseUrl: string, apiKey: str
 	if (result.rejectedStatus) {
 		throw new Error(`openai-codex-endpoint: ${cpaRoot}${CPA_MODELS_PATH} rejected the key (HTTP ${result.rejectedStatus})`);
 	}
-	const models = result.models.filter(model => model.id.startsWith("gpt-")).map(model => ({ ...model, baseUrl }));
+	const models = result.models.flatMap(model => {
+		const { contextWindow, maxTokens } = model;
+		return model.id.startsWith("gpt-") && contextWindow !== null && maxTokens !== null
+			? [{ ...model, baseUrl, contextWindow, maxTokens }]
+			: [];
+	});
 	if (models.length === 0) {
 		throw new Error(`openai-codex-endpoint: ${cpaRoot}${CPA_MODELS_PATH} listed no visible gpt- models`);
 	}
