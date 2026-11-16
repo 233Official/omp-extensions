@@ -1,11 +1,11 @@
 """在隔离 HOME 中用真实 omp 加载扩展，覆盖两种加载方式：
 
 - ``extensions``：同步脚本部署的方式，包目录位于 ``~/.omp/agent/extensions/<名称>/``；
-- ``plugin``：朋友使用的方式，``omp plugin install`` 安装整个仓库。默认安装本地工作树（OMP 对本地路径执行 link）；
-  设置 ``OMP_EXTENSIONS_PLUGIN_SOURCE``（如 ``github:233Official/omp-extensions#main``）时改为从该来源安装，
-  用于推送后验证朋友实际的 Git 安装。
+- ``plugin``：朋友使用的方式，先添加本仓库为 marketplace，再按 ``<扩展>@<marketplace>`` 单独安装。默认以本地工作树
+  作为 marketplace 来源；设置 ``OMP_EXTENSIONS_MARKETPLACE``（如 ``233Official/omp-extensions``）时改为该来源，
+  用于推送后验证朋友实际的 GitHub 安装。
 
-本机模型服务只是一个假的 CPA，不需要真实凭据；只有指定 Git 来源时才访问网络。
+本机模型服务只是一个假的 CPA，不需要真实凭据；只有指定远程来源时才访问网络。
 """
 from __future__ import annotations
 
@@ -114,9 +114,11 @@ def deploy_extension_dir(home: Path) -> None:
 
 
 def install_plugin(home: Path) -> None:
-    source = os.environ.get("OMP_EXTENSIONS_PLUGIN_SOURCE") or str(REPO)
-    result = omp(home, "plugin", "install", source)
-    assert result.returncode == 0, result.stdout + result.stderr
+    catalog = json.loads((REPO / ".omp-plugin/marketplace.json").read_text())
+    source = os.environ.get("OMP_EXTENSIONS_MARKETPLACE") or str(REPO)
+    for args in (("marketplace", "add", source), ("install", f"{EXTENSION.name}@{catalog['name']}")):
+        result = omp(home, "plugin", *args)
+        assert result.returncode == 0, result.stdout + result.stderr
 
 
 def listed_models(home: Path) -> dict[str, dict]:

@@ -1,0 +1,20 @@
+{
+	"name": "omp-extensions-233",
+	"owner": {
+		"name": "233Official"
+	},
+	"metadata": {
+		"description": "轻量 OMP（oh-my-pi）扩展合集，每个扩展单独安装"
+	},
+	"plugins": [
+		{
+			"name": "openai-codex-endpoint",
+			"source": "./openai-codex-endpoint",
+			"description": "让 openai-codex provider 走 CLIProxyAPI（CPA）：按 CODEX_CPA_BASE_URL 切换地址，并从 CPA 发现 Codex 模型",
+			"homepage": "https://github.com/233Official/omp-extensions/tree/main/openai-codex-endpoint",
+			"repository": "https://github.com/233Official/omp-extensions",
+			"license": "MIT",
+			"category": "development"
+		}
+	]
+}

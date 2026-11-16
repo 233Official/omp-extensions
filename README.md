@@ -1,6 +1,6 @@
 # omp-extensions
 
-轻量 [OMP（oh-my-pi）](https://github.com/can1357/oh-my-pi) 扩展合集。每个扩展一个目录，仓库根目录的 `package.json` 把它们作为一个 OMP 插件发布。体量较大、需要独立发版的扩展另建仓库。
+轻量 [OMP（oh-my-pi）](https://github.com/can1357/oh-my-pi) 扩展合集。每个扩展一个目录；仓库同时是一个 OMP marketplace（`.omp-plugin/marketplace.json`），每个扩展作为独立插件按需安装。体量较大、需要独立发版的扩展另建仓库。
 
 | 扩展 | 说明 |
 | --- | --- |
@@ -8,12 +8,22 @@
 
 ## 安装与更新
 
+先添加本仓库为 marketplace，再按名称安装需要的扩展：
+
 ```bash
-omp plugin install github:233Official/omp-extensions
-omp plugin upgrade omp-extensions
+omp plugin marketplace add 233Official/omp-extensions
+omp plugin install openai-codex-endpoint@omp-extensions-233
 ```
 
-安装后新开 OMP 进程生效。各扩展的配置见其目录下的 README。
+在 OMP 交互界面中也可以用 `/marketplace add 233Official/omp-extensions` 与 `/marketplace install openai-codex-endpoint@omp-extensions-233`。安装后新开 OMP 进程生效。各扩展的配置见其目录下的 README。
+
+| 操作 | 命令 |
+| --- | --- |
+| 升级 | `omp plugin marketplace update omp-extensions-233`，再 `omp plugin upgrade openai-codex-endpoint@omp-extensions-233` |
+| 停用 / 启用 | `omp plugin disable openai-codex-endpoint@omp-extensions-233` / `omp plugin enable …` |
+| 卸载 | `omp plugin uninstall openai-codex-endpoint@omp-extensions-233` |
+
+marketplace 读取默认分支 `main`；安装与升级比较的版本取自扩展目录的 `package.json`。同一扩展只用一种方式加载：已通过 marketplace 安装时，`~/.omp/agent/extensions/` 下不要再放同名扩展。
 
 已验证版本：OMP 18.20.3，CLIProxyAPI v8.0.73。扩展使用了 OMP 的内部模块，其他 OMP 版本可能无法加载；出现问题时请附 `omp --version` 提交 Issue。
 
@@ -22,7 +32,7 @@ omp plugin upgrade omp-extensions
 ### 目录结构
 
 ```text
-package.json                 插件清单：omp.extensions 列出各扩展目录
+.omp-plugin/marketplace.json marketplace 目录：每个扩展一条，source 指向扩展目录
 <扩展>/package.json           扩展清单：omp.extensions 指向入口文件
 <扩展>/index.ts               扩展入口
 scripts/sync_omp_extension.py 本机同步工具（macOS）
@@ -31,16 +41,18 @@ tests/                        同步工具回归测试与真实 OMP 加载测试
 
 扩展目录保持扁平：同步只复制目录第一层的普通文件，跳过隐藏文件、子目录与 `*.test.ts`。
 
+新增扩展：建目录（`package.json` 的 `omp.extensions` 指向入口），在 `.omp-plugin/marketplace.json` 增加一条 `source` 为 `./<扩展>` 的记录，并在上方扩展表中登记。发布改动时提升扩展 `package.json` 的 `version`：朋友的 `upgrade` 与本机同步的自动提交都以它为准。
+
 ### 测试
 
 ```bash
 uv run --no-project --with pytest pytest tests
 ```
 
-`tests/test_omp_loading.py` 在临时 HOME 中运行本机 `omp`，对接一个假的 CPA，分别验证两种加载方式：复制到 `~/.omp/agent/extensions/` 下的包目录，以及 `omp plugin install` 安装整个仓库（默认安装本地工作树）。推送后可验证 Git 安装：
+`tests/test_omp_loading.py` 在临时 HOME 中运行本机 `omp`，对接一个假的 CPA，分别验证两种加载方式：复制到 `~/.omp/agent/extensions/` 下的包目录，以及把本仓库添加为 marketplace 后单独安装扩展（默认以本地工作树为来源）。推送后可验证 GitHub 来源：
 
 ```bash
-OMP_EXTENSIONS_PLUGIN_SOURCE=github:233Official/omp-extensions#main \
+OMP_EXTENSIONS_MARKETPLACE=233Official/omp-extensions \
   uv run --no-project --with pytest pytest tests/test_omp_loading.py
 ```
 
