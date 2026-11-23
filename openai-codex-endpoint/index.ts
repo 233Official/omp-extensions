@@ -33,7 +33,11 @@ export default (pi: ExtensionAPI) => {
 
 	pi.registerProvider(PROVIDER, {
 		baseUrl,
-		fetchDynamicModels: apiKey => fetchCpaCodexModels(cpaRoot, baseUrl, apiKey),
+		discoverModels: ({ accounts, fetch }) => {
+			// CPA 只使用配置的 API key，不把已登录的 Codex OAuth 凭据发给中转。
+			const key = accounts.find(account => !("ok" in account) && !account.accountId)?.apiKey;
+			return fetchCpaCodexModels(cpaRoot, baseUrl, key, fetch);
+		},
 	});
 
 	if (!overrideBaseUrl) return;
@@ -71,24 +75,23 @@ function cpaRootOf(baseUrl: string): string | undefined {
  * 失败一律抛错而不是返回空数组：OMP 把成功结果视为权威目录，空数组会清空 openai-codex 的模型列表，
  * 抛错则保留上次缓存。
  *
- * 返回 OMP 自带解析器产出的完整模型行（含 api、remoteCompaction 等字段），只把 baseUrl 换成推理地址。
- * 解析器总会填入上下文窗口与输出上限；这里的非空判断只为让类型满足 ProviderModelConfig。
+ * 保留 OMP 解析出的完整 ModelSpec（包括 serviceTiers），只替换推理地址。
  */
-async function fetchCpaCodexModels(cpaRoot: string, baseUrl: string, apiKey: string | undefined) {
+async function fetchCpaCodexModels(
+	cpaRoot: string,
+	baseUrl: string,
+	apiKey: string | undefined,
+	fetchFn: NonNullable<Parameters<typeof fetchCodexModels>[0]["fetchFn"]>,
+) {
 	if (!apiKey) throw new Error("openai-codex-endpoint: no openai-codex API key for CPA model discovery");
-	const result = await fetchCodexModels({ accessToken: apiKey, baseUrl: cpaRoot, paths: [CPA_MODELS_PATH] });
+	const result = await fetchCodexModels({ accessToken: apiKey, baseUrl: cpaRoot, paths: [CPA_MODELS_PATH], fetchFn });
 	if (!result) throw new Error(`openai-codex-endpoint: ${cpaRoot}${CPA_MODELS_PATH} returned no Codex model catalog`);
 	if (result.rejectedStatus) {
 		throw new Error(`openai-codex-endpoint: ${cpaRoot}${CPA_MODELS_PATH} rejected the key (HTTP ${result.rejectedStatus})`);
 	}
-	const models = result.models.flatMap(model => {
-		const { contextWindow, maxTokens } = model;
-		return model.id.startsWith("gpt-") && contextWindow !== null && maxTokens !== null
-			? [{ ...model, baseUrl, contextWindow, maxTokens }]
-			: [];
-	});
+	const models = result.models.filter(model => model.id.startsWith("gpt-"));
 	if (models.length === 0) {
 		throw new Error(`openai-codex-endpoint: ${cpaRoot}${CPA_MODELS_PATH} listed no visible gpt- models`);
 	}
-	return models;
+	return models.map(model => ({ ...model, baseUrl }));
 }

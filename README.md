@@ -25,7 +25,7 @@ omp plugin install openai-codex-endpoint@omp-extensions-233
 
 marketplace 读取默认分支 `main`；安装与升级比较的版本取自扩展目录的 `package.json`。同一扩展只用一种方式加载：已通过 marketplace 安装时，`~/.omp/agent/extensions/` 下不要再放同名扩展。
 
-已验证版本：OMP 18.20.3，CLIProxyAPI v8.0.73。扩展使用了 OMP 的内部模块，其他 OMP 版本可能无法加载；出现问题时请附 `omp --version` 提交 Issue。
+`openai-codex-endpoint` 需要 OMP 19.1.0 或更新版本；开发依赖固定到 19.1.1。扩展使用了 OMP 的内部模块，升级前请运行类型检查和加载测试。报告问题时请附 `omp --version`。
 
 ## 开发
 

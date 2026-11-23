@@ -35,6 +35,7 @@ CATALOG = {
             "input_modalities": ["text", "image"],
             "default_reasoning_level": "medium",
             "supported_reasoning_levels": [{"effort": "low"}, {"effort": "medium"}, {"effort": "high"}],
+            "service_tiers": [{"id": "priority"}, {"id": "ultrafast"}],
             "priority": 1,
         },
         {"slug": "gpt-test-hidden", "display_name": "Hidden", "visibility": "hide", "priority": 2},
@@ -93,7 +94,7 @@ def isolated_home(tmp_path: Path, base_url: str) -> Path:
     return home
 
 
-def omp(home: Path, *args: str) -> subprocess.CompletedProcess:
+def omp(home: Path, *args: str, stdin: str | None = None) -> subprocess.CompletedProcess:
     env = {
         "PATH": os.environ["PATH"],
         "HOME": str(home),
@@ -102,7 +103,9 @@ def omp(home: Path, *args: str) -> subprocess.CompletedProcess:
         "TERM": "dumb",
         KEY_VARIABLE: KEY,
     }
-    return subprocess.run(["omp", *args], cwd=home, env=env, capture_output=True, text=True, timeout=180)
+    return subprocess.run(
+        ["omp", *args], cwd=home, env=env, input=stdin, capture_output=True, text=True, timeout=180
+    )
 
 
 def deploy_extension_dir(home: Path) -> None:
@@ -121,14 +124,16 @@ def install_plugin(home: Path) -> None:
         assert result.returncode == 0, result.stdout + result.stderr
 
 
-def listed_models(home: Path) -> dict[str, dict]:
-    refresh = omp(home, "models", "refresh")
-    assert refresh.returncode == 0, refresh.stdout + refresh.stderr
-    result = omp(home, "models", "openai-codex", "--json")
-    assert result.returncode == 0, result.stdout + result.stderr
-    payload = json.loads(result.stdout)
-    rows = payload["models"] if isinstance(payload, dict) else payload
-    return {row["id"]: row for row in rows if row.get("provider") == "openai-codex"}
+def rpc(home: Path, *requests: dict) -> dict:
+    result = omp(home, "--mode", "rpc", "--no-ui", "--no-session",
+                 stdin="".join(json.dumps(request) + "\n" for request in requests))
+    assert result.returncode == 0, result.stderr
+    responses = {}
+    for line in result.stdout.splitlines():
+        response = json.loads(line)
+        if response.get("type") == "response":
+            responses[response["id"]] = response
+    return responses
 
 
 @pytest.mark.parametrize("mode", ["extensions", "plugin"])
@@ -139,13 +144,24 @@ def test_cpa_models_are_discovered_under_openai_codex(tmp_path, cpa, mode):
     else:
         install_plugin(home)
 
-    models = listed_models(home)
+    responses = rpc(home, {"id": "catalog", "type": "get_available_models"})
+    models = {row["id"] for row in responses["catalog"]["data"]["models"] if row["provider"] == "openai-codex"}
 
     assert "gpt-test-cpa" in models
     assert "gpt-test-hidden" not in models
     assert "deepseek-test" not in models
     assert any(path.startswith("/v1/models?client_version=") and auth == f"Bearer {KEY}"
                for path, auth in FakeCpa.requests)
+
+    responses = rpc(
+        home,
+        {"id": "select", "type": "set_model", "provider": "openai-codex", "modelId": "gpt-test-cpa"},
+        {"id": "ultra", "type": "prompt", "message": "/fast ultra"},
+        {"id": "tier", "type": "get_state"},
+    )
+    assert responses["select"]["success"], responses["select"]
+    assert responses["ultra"]["data"]["agentInvoked"] is False
+    assert responses["tier"]["data"]["fastModeActive"] is True
 
 
 @pytest.mark.parametrize("mode", ["extensions", "plugin"])
@@ -157,7 +173,8 @@ def test_non_cpa_base_url_disables_extension_without_breaking_omp(tmp_path, cpa,
     else:
         install_plugin(home)
 
-    models = listed_models(home)
+    responses = rpc(home, {"id": "catalog", "type": "get_available_models"})
+    models = {row["id"] for row in responses["catalog"]["data"]["models"] if row["provider"] == "openai-codex"}
 
     assert "gpt-test-cpa" not in models
     assert not any(path.startswith("/v1/models") for path, _ in FakeCpa.requests)

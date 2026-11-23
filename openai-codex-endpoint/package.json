@@ -1,6 +1,6 @@
 {
 	"name": "omp-openai-codex-endpoint",
-	"version": "1.0.1",
+	"version": "1.0.4",
 	"description": "让 OMP 的 openai-codex provider 走 CLIProxyAPI（CPA）：按环境变量切换地址，并从 CPA 发现 Codex 模型",
 	"private": true,
 	"type": "module",
